@@ -45,7 +45,7 @@ export interface ExpenseSplit {
   userId: string;
   amountCents: number;
   /** Present when the expense was split by percentage. */
-  percent?: number;
+  percent?: number | null;
 }
 
 export interface Expense {

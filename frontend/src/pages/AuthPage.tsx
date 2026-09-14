@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../api';
 import { errorMessage } from '../apiError';
 import { useAuth } from '../auth/AuthContext';
 
@@ -34,8 +33,7 @@ export function AuthPage() {
     }
   }
 
-  function resetDemo() {
-    api.resetDemoData();
+  function fillDemoAccount() {
     setError(null);
     setIdentifier('alice');
     setPassword('password123');
@@ -100,10 +98,10 @@ export function AuthPage() {
         </button>
 
         <div className="demo-note">
-          <strong>Demo mode</strong> — data lives in this browser. Try <code>alice</code>, <code>bob</code>, <code>carol</code> or{' '}
-          <code>dave</code> with password <code>password123</code>.{' '}
-          <button type="button" className="btn-link" onClick={resetDemo}>
-            Reset demo data
+          <strong>Demo accounts</strong> — <code>alice</code>, <code>bob</code>, <code>carol</code> or <code>dave</code> with
+          password <code>password123</code>. Demo data resets when the backend restarts.{' '}
+          <button type="button" className="btn-link" onClick={fillDemoAccount}>
+            Use demo account
           </button>
         </div>
       </form>

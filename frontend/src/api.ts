@@ -1,13 +1,11 @@
 /**
- * The single place the frontend talks to the backend.
+ * The single place the frontend talks to the backend (FastAPI, see backend/README.md).
  *
- * Every call currently goes to an in-browser mock (src/mock/mockServer.ts). When the FastAPI
- * backend exists, replace each body with a fetch to the endpoint noted beside it — the rest of
- * the app only depends on these signatures.
+ * Base URL comes from VITE_API_URL, defaulting to http://localhost:8000.
  */
 import { ApiError } from './apiError';
-import * as server from './mock/mockServer';
 import type {
+  AuthResponse,
   Balances,
   Expense,
   Group,
@@ -20,6 +18,7 @@ import type {
   User,
 } from './types';
 
+const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 const TOKEN_KEY = 'spliteasy.token';
 
 /** Fired when the backend rejects the stored token; AuthProvider signs the user out. */
@@ -49,78 +48,101 @@ export const tokenStore = {
   },
 };
 
-async function authed<T>(request: (token: string) => Promise<T>): Promise<T> {
-  try {
-    const token = tokenStore.get();
-    if (!token) throw new ApiError(401, 'Please sign in');
-    return await request(token);
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      tokenStore.clear();
-      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
-    }
-    throw err;
-  }
+interface RequestOptions {
+  method?: 'GET' | 'POST';
+  body?: unknown;
+  /** Send the stored token and sign the user out if the backend rejects it. */
+  auth?: boolean;
 }
 
+async function request<T>(path: string, { method = 'GET', body, auth = true }: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  if (auth) {
+    const token = tokenStore.get();
+    if (!token) throw unauthorized('Please sign in');
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, `Can't reach the SplitEasy server at ${API_URL}. Is the backend running?`);
+  }
+
+  if (res.status === 204) return undefined as T;
+
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = errorDetail(data) ?? `Request failed (${res.status})`;
+    throw auth && res.status === 401 ? unauthorized(message) : new ApiError(res.status, message);
+  }
+  return data as T;
+}
+
+function unauthorized(message: string): ApiError {
+  tokenStore.clear();
+  window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  return new ApiError(401, message);
+}
+
+function errorDetail(data: unknown): string | null {
+  if (data && typeof data === 'object' && 'detail' in data) {
+    const { detail } = data as { detail: unknown };
+    if (typeof detail === 'string') return detail;
+  }
+  return null;
+}
+
+async function authenticate(path: string, body: RegisterInput | LoginInput): Promise<User> {
+  const { token, user } = await request<AuthResponse>(path, { method: 'POST', body, auth: false });
+  tokenStore.set(token);
+  return user;
+}
+
+const groupPath = (groupId: string) => `/groups/${encodeURIComponent(groupId)}`;
+
 export const api = {
-  // POST /auth/register
-  async register(input: RegisterInput): Promise<User> {
-    const { token, user } = await server.register(input);
-    tokenStore.set(token);
-    return user;
-  },
+  register: (input: RegisterInput): Promise<User> => authenticate('/auth/register', input),
 
-  // POST /auth/login
-  async login(input: LoginInput): Promise<User> {
-    const { token, user } = await server.login(input);
-    tokenStore.set(token);
-    return user;
-  },
+  login: (input: LoginInput): Promise<User> => authenticate('/auth/login', input),
 
-  // POST /auth/logout
   async logout(): Promise<void> {
     const token = tokenStore.get();
+    if (!token) return;
+    // Revoke server-side, but never block signing out on it.
+    await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(
+      () => undefined,
+    );
     tokenStore.clear();
-    if (token) await server.logout(token).catch(() => undefined);
   },
 
-  // GET /auth/me
-  me: (): Promise<User> => authed((t) => server.me(t)),
+  me: (): Promise<User> => request('/auth/me'),
 
-  // GET /groups
-  listGroups: (): Promise<GroupSummary[]> => authed((t) => server.listGroups(t)),
+  listGroups: (): Promise<GroupSummary[]> => request('/groups'),
 
-  // POST /groups
-  createGroup: (name: string): Promise<Group> => authed((t) => server.createGroup(t, name)),
+  createGroup: (name: string): Promise<Group> => request('/groups', { method: 'POST', body: { name } }),
 
-  // GET /groups/{groupId}
-  getGroup: (groupId: string): Promise<Group> => authed((t) => server.getGroup(t, groupId)),
+  getGroup: (groupId: string): Promise<Group> => request(groupPath(groupId)),
 
-  // POST /groups/{groupId}/members
   addMember: (groupId: string, identifier: string): Promise<Group> =>
-    authed((t) => server.addMember(t, groupId, identifier)),
+    request(`${groupPath(groupId)}/members`, { method: 'POST', body: { identifier } }),
 
-  // GET /groups/{groupId}/expenses
-  listExpenses: (groupId: string): Promise<Expense[]> => authed((t) => server.listExpenses(t, groupId)),
+  listExpenses: (groupId: string): Promise<Expense[]> => request(`${groupPath(groupId)}/expenses`),
 
-  // POST /groups/{groupId}/expenses
   createExpense: (groupId: string, input: NewExpense): Promise<Expense> =>
-    authed((t) => server.createExpense(t, groupId, input)),
+    request(`${groupPath(groupId)}/expenses`, { method: 'POST', body: input }),
 
-  // GET /groups/{groupId}/balances
-  getBalances: (groupId: string): Promise<Balances> => authed((t) => server.getBalances(t, groupId)),
+  getBalances: (groupId: string): Promise<Balances> => request(`${groupPath(groupId)}/balances`),
 
-  // GET /groups/{groupId}/settlements
-  listSettlements: (groupId: string): Promise<Settlement[]> => authed((t) => server.listSettlements(t, groupId)),
+  listSettlements: (groupId: string): Promise<Settlement[]> => request(`${groupPath(groupId)}/settlements`),
 
-  // POST /groups/{groupId}/settlements
   createSettlement: (groupId: string, input: NewSettlement): Promise<Settlement> =>
-    authed((t) => server.createSettlement(t, groupId, input)),
-
-  /** Mock only: wipes local data and restores the demo accounts. Remove with the mock. */
-  resetDemoData(): void {
-    tokenStore.clear();
-    server.resetDemoData();
-  },
+    request(`${groupPath(groupId)}/settlements`, { method: 'POST', body: input }),
 };
