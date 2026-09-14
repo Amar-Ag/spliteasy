@@ -3,7 +3,7 @@
 import re
 
 from app.config import Settings
-from app.database import Database
+from app.database import Database, DuplicateError
 from app.errors import Conflict, NotFound, Unauthorized, Unprocessable
 from app.models import Expense, ExpenseSplit, Group, Settlement, User, new_id, utcnow
 from app.money import allocate_proportional, compute_net_balances
@@ -53,7 +53,11 @@ def register_user(db: Database, settings: Settings, data: RegisterIn) -> User:
         password_hash=hash_password(data.password, settings.password_hash_iterations),
         created_at=utcnow(),
     )
-    db.add_user(user)
+    try:
+        db.add_user(user)
+    except DuplicateError:
+        # Another sign-up claimed the email or username between our checks and the insert.
+        raise Conflict("An account with that email or username already exists") from None
     return user
 
 

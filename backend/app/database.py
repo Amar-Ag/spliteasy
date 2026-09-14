@@ -1,4 +1,8 @@
-"""Storage interface. `MockDatabase` implements it in memory; a SQLAlchemy version can replace it later."""
+"""Storage interface used by the rest of the app. `SqlDatabase` (app/sql_database.py) implements it.
+
+Everything outside the storage layer depends only on this protocol and the dataclasses in
+app/models.py, so the backing database can change without touching services or routes.
+"""
 
 from datetime import datetime
 from typing import Protocol
@@ -6,11 +10,21 @@ from typing import Protocol
 from app.models import Expense, Group, Settlement, User
 
 
+class DuplicateError(Exception):
+    """A record would violate a uniqueness rule (e.g. an email or username is already taken)."""
+
+
 class Database(Protocol):
     # Users
-    def add_user(self, user: User) -> None: ...
+    def add_user(self, user: User) -> None:
+        """Raises `DuplicateError` if the email or username (case-insensitive) is taken."""
+        ...
+
     def get_user(self, user_id: str) -> User | None: ...
-    def get_user_by_email(self, email: str) -> User | None: ...
+    def get_user_by_email(self, email: str) -> User | None:
+        """Case-insensitive match."""
+        ...
+
     def get_user_by_username(self, username: str) -> User | None:
         """Case-insensitive match."""
         ...
@@ -22,7 +36,9 @@ class Database(Protocol):
         """Newest first."""
         ...
 
-    def add_group_member(self, group_id: str, user_id: str) -> None: ...
+    def add_group_member(self, group_id: str, user_id: str) -> None:
+        """Appends to the member list; a no-op if they're already a member."""
+        ...
 
     # Expenses
     def add_expense(self, expense: Expense) -> None: ...

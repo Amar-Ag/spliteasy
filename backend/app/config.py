@@ -22,6 +22,8 @@ class Settings:
     password_hash_iterations: int = 600_000
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     seed_demo_data: bool = True
+    # Any SQLAlchemy URL. Relative SQLite paths resolve against the working directory (backend/).
+    database_url: str = "sqlite:///./spliteasy.db"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -36,4 +38,5 @@ class Settings:
             token_ttl_minutes=int(os.environ.get("SPLITEASY_TOKEN_TTL_MINUTES", cls.token_ttl_minutes)),
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             seed_demo_data=_env_bool("SPLITEASY_SEED_DEMO_DATA", True),
+            database_url=os.environ.get("SPLITEASY_DATABASE_URL", cls.database_url),
         )

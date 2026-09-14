@@ -217,3 +217,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# SplitEasy local SQLite database
+backend/*.db
+backend/*.db-journal
+

@@ -1,12 +1,13 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.application import create_app
 from app.config import Settings
-from app.mock_db import MockDatabase
+from app.sql_database import SqlDatabase
 
 TEST_SECRET = "test-secret-key-that-is-long-enough-for-hs256"
 
@@ -23,18 +24,33 @@ class Account:
         return {"Authorization": f"Bearer {self.token}"}
 
 
+def sqlite_file_url(directory: Path) -> str:
+    return f"sqlite:///{(directory / 'spliteasy-test.db').as_posix()}"
+
+
+@pytest.fixture(params=["sqlite-memory", "sqlite-file"])
+def db(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[SqlDatabase]:
+    """Every API test runs against an in-memory and an on-disk SQLite database."""
+    url = "sqlite://" if request.param == "sqlite-memory" else sqlite_file_url(tmp_path)
+    database = SqlDatabase.from_url(url)
+    database.create_schema()
+    yield database
+    database.close()
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
         jwt_secret=TEST_SECRET,
         password_hash_iterations=1_000,  # keep tests fast
         seed_demo_data=False,
+        database_url="sqlite://",
     )
 
 
 @pytest.fixture
-def client(settings: Settings) -> Iterator[TestClient]:
-    app = create_app(settings=settings, db=MockDatabase())
+def client(settings: Settings, db: SqlDatabase) -> Iterator[TestClient]:
+    app = create_app(settings=settings, db=db)
     with TestClient(app) as c:
         yield c
 

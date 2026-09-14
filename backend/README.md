@@ -1,6 +1,6 @@
 # SplitEasy Backend
 
-FastAPI backend for SplitEasy. Data lives in an in-memory mock database for now (`app/mock_db.py`) and resets on restart.
+FastAPI backend for SplitEasy. Data is stored with SQLAlchemy — a local SQLite file (`backend/spliteasy.db`) by default.
 
 ## Run
 
@@ -11,13 +11,15 @@ uv run uvicorn main:app --reload
 
 API docs: http://127.0.0.1:8000/docs
 
-Demo accounts are seeded on startup: `alice`, `bob`, `carol`, `dave` — password `password123`.
+Tables are created on startup if missing. Demo accounts are seeded into an empty database: `alice`, `bob`, `carol`, `dave` — password `password123`. Delete `spliteasy.db` to start fresh.
 
 ## Test
 
 ```bash
 uv run pytest
 ```
+
+API tests run twice — against in-memory SQLite and a temporary SQLite file. `tests/test_sql_database.py` covers the storage layer directly.
 
 ## Configuration
 
@@ -26,7 +28,8 @@ uv run pytest
 | `SPLITEASY_JWT_SECRET` | random per process | Secret for signing JWTs. Set it so tokens survive restarts. |
 | `SPLITEASY_TOKEN_TTL_MINUTES` | `10080` (7 days) | Token lifetime |
 | `SPLITEASY_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated origins allowed to call the API (the Vite dev server) |
-| `SPLITEASY_SEED_DEMO_DATA` | `true` | Seed demo users and groups |
+| `SPLITEASY_SEED_DEMO_DATA` | `true` | Seed demo users and groups into an empty database |
+| `SPLITEASY_DATABASE_URL` | `sqlite:///./spliteasy.db` | Any SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host/spliteasy` (install the driver with `uv add`) |
 
 ## API
 
@@ -59,11 +62,17 @@ app/application.py   App factory: settings, database, routers, CORS
 app/routers/         HTTP endpoints
 app/services.py      Business rules and validation
 app/money.py         Split allocation and debt simplification
-app/database.py      Storage interface (Protocol)
-app/mock_db.py       In-memory implementation — swap for SQLAlchemy later
+app/database.py      Storage interface (Protocol) — the only thing services and routes depend on
+app/sql_database.py  SQLAlchemy tables and the `SqlDatabase` implementation
+app/models.py        Domain dataclasses passed between layers
 app/security.py      Password hashing (PBKDF2) and JWTs
 app/seed.py          Demo data
-tests/               Endpoint tests (pytest + TestClient)
+tests/               API tests (pytest + TestClient) and storage tests
 ```
 
-To switch to a real database, implement the `Database` protocol and pass it to `create_app(db=...)`.
+The app is database-agnostic at two levels: `SqlDatabase` works with any SQLAlchemy-supported database via
+`SPLITEASY_DATABASE_URL`, and a completely different store can be plugged in by implementing the `Database`
+protocol and passing it to `create_app(db=...)`.
+
+Schema changes are applied with `create_all`, which only creates missing tables. Once the schema needs to evolve
+with real data in place, add Alembic migrations.

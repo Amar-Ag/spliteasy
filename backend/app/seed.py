@@ -1,4 +1,4 @@
-"""Demo data matching the frontend mock, so both behave the same during development."""
+"""Demo users and groups for local development."""
 
 from datetime import timedelta
 
@@ -12,6 +12,10 @@ DEMO_PASSWORD = "password123"
 
 
 def seed_demo_data(db: Database, settings: Settings) -> None:
+    """Insert demo data unless it's already there (the database persists across restarts)."""
+    if db.get_user_by_username("alice") is not None:
+        return
+
     now = utcnow()
 
     def days_ago(days: int):
@@ -61,8 +65,7 @@ def seed_demo_data(db: Database, settings: Settings) -> None:
             created_by_id=bob, created_at=days_ago(8),
         ),
     ]
-    # The mock database lists newest-first by insertion order, so insert oldest first.
-    for expense in sorted(expenses, key=lambda e: e.created_at):
+    for expense in expenses:
         db.add_expense(expense)
 
     db.add_settlement(
