@@ -1,7 +1,8 @@
 /**
  * The single place the frontend talks to the backend (FastAPI, see backend/README.md).
  *
- * Base URL comes from VITE_API_URL, defaulting to http://localhost:8000.
+ * VITE_API_URL is the backend origin, defaulting to http://localhost:8000 for `npm run dev`.
+ * Set it to an empty string when the backend serves this app itself, so calls stay same-origin.
  */
 import { ApiError } from './apiError';
 import type {
@@ -18,7 +19,8 @@ import type {
   User,
 } from './types';
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+const API_ORIGIN = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+const API_URL = `${API_ORIGIN}/api`;
 const TOKEN_KEY = 'spliteasy.token';
 
 /** Fired when the backend rejects the stored token; AuthProvider signs the user out. */

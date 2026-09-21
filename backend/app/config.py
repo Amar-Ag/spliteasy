@@ -24,6 +24,8 @@ class Settings:
     seed_demo_data: bool = True
     # Any SQLAlchemy URL. Relative SQLite paths resolve against the working directory (backend/).
     database_url: str = "sqlite:///./spliteasy.db"
+    # Directory holding the built frontend. When set, the API also serves the UI (see the Dockerfile).
+    static_dir: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,4 +41,5 @@ class Settings:
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             seed_demo_data=_env_bool("SPLITEASY_SEED_DEMO_DATA", True),
             database_url=os.environ.get("SPLITEASY_DATABASE_URL", cls.database_url),
+            static_dir=os.environ.get("SPLITEASY_STATIC_DIR") or None,
         )

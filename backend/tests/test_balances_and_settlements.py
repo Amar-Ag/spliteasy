@@ -8,7 +8,7 @@ def trio(alice, bob, carol, make_group):
 
 def add_expense(client, group, payer, amount, splits, split_type="amount"):
     res = client.post(
-        f"/groups/{group['id']}/expenses",
+        f"/api/groups/{group['id']}/expenses",
         json={
             "description": "Expense",
             "amountCents": amount,
@@ -23,14 +23,14 @@ def add_expense(client, group, payer, amount, splits, split_type="amount"):
 
 def settle(client, group, actor, from_account, to_account, amount):
     return client.post(
-        f"/groups/{group['id']}/settlements",
+        f"/api/groups/{group['id']}/settlements",
         json={"fromUserId": from_account.id, "toUserId": to_account.id, "amountCents": amount},
         headers=actor.headers,
     )
 
 
 def get_balances(client, group, account):
-    res = client.get(f"/groups/{group['id']}/balances", headers=account.headers)
+    res = client.get(f"/api/groups/{group['id']}/balances", headers=account.headers)
     assert res.status_code == 200, res.text
     return res.json()
 
@@ -108,8 +108,8 @@ def test_full_settlement_clears_balances(client, alice, bob, trio):
 def test_group_list_reflects_my_balance(client, alice, bob, trio):
     add_expense(client, trio, alice, 2000, [(bob, 2000)])
 
-    alice_view = client.get("/groups", headers=alice.headers).json()
-    bob_view = client.get("/groups", headers=bob.headers).json()
+    alice_view = client.get("/api/groups", headers=alice.headers).json()
+    bob_view = client.get("/api/groups", headers=bob.headers).json()
 
     assert alice_view[0]["myBalanceCents"] == 2000
     assert bob_view[0]["myBalanceCents"] == -2000
@@ -119,7 +119,7 @@ def test_list_settlements_newest_first(client, alice, bob, trio):
     first = settle(client, trio, alice, bob, alice, 100).json()
     second = settle(client, trio, alice, bob, alice, 200).json()
 
-    res = client.get(f"/groups/{trio['id']}/settlements", headers=alice.headers)
+    res = client.get(f"/api/groups/{trio['id']}/settlements", headers=alice.headers)
 
     assert res.status_code == 200
     assert [s["id"] for s in res.json()] == [second["id"], first["id"]]
@@ -142,6 +142,6 @@ def test_settlement_validation(client, alice, bob, register, trio):
 def test_non_members_cannot_access_balances_or_settlements(client, alice, bob, register, trio):
     outsider = register("outsider")
 
-    assert client.get(f"/groups/{trio['id']}/balances", headers=outsider.headers).status_code == 404
-    assert client.get(f"/groups/{trio['id']}/settlements", headers=outsider.headers).status_code == 404
+    assert client.get(f"/api/groups/{trio['id']}/balances", headers=outsider.headers).status_code == 404
+    assert client.get(f"/api/groups/{trio['id']}/settlements", headers=outsider.headers).status_code == 404
     assert settle(client, trio, outsider, bob, alice, 100).status_code == 404

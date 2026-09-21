@@ -59,7 +59,7 @@ def client(settings: Settings, db: SqlDatabase) -> Iterator[TestClient]:
 def register(client: TestClient) -> Callable[[str], Account]:
     def _register(username: str) -> Account:
         res = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": f"{username}@example.com", "username": username, "password": "password123"},
         )
         assert res.status_code == 201, res.text
@@ -89,11 +89,11 @@ def make_group(client: TestClient) -> Callable[..., dict]:
     """Creates a group owned by `owner` and adds `members` to it. Returns the group JSON."""
 
     def _make_group(owner: Account, *members: Account, name: str = "Trip") -> dict:
-        res = client.post("/groups", json={"name": name}, headers=owner.headers)
+        res = client.post("/api/groups", json={"name": name}, headers=owner.headers)
         assert res.status_code == 201, res.text
         group = res.json()
         for member in members:
-            res = client.post(f"/groups/{group['id']}/members", json={"identifier": member.username}, headers=owner.headers)
+            res = client.post(f"/api/groups/{group['id']}/members", json={"identifier": member.username}, headers=owner.headers)
             assert res.status_code == 200, res.text
             group = res.json()
         return group

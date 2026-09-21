@@ -15,7 +15,7 @@ def post_expense(client, account, group, **overrides):
         "splits": [],
         **overrides,
     }
-    return client.post(f"/groups/{group['id']}/expenses", json=payload, headers=account.headers)
+    return client.post(f"/api/groups/{group['id']}/expenses", json=payload, headers=account.headers)
 
 
 def test_create_expense_split_by_amount(client, alice, bob, carol, trio):
@@ -119,7 +119,7 @@ def test_list_expenses_newest_first(client, alice, trio):
     first = post_expense(client, alice, trio, description="First", splits=[{"userId": alice.id, "value": 3000}]).json()
     second = post_expense(client, alice, trio, description="Second", splits=[{"userId": alice.id, "value": 3000}]).json()
 
-    res = client.get(f"/groups/{trio['id']}/expenses", headers=alice.headers)
+    res = client.get(f"/api/groups/{trio['id']}/expenses", headers=alice.headers)
 
     assert res.status_code == 200
     assert [e["id"] for e in res.json()] == [second["id"], first["id"]]
@@ -129,12 +129,12 @@ def test_expenses_are_scoped_to_their_group(client, alice, trio, make_group):
     other = make_group(alice, name="Other")
     post_expense(client, alice, other, splits=[{"userId": alice.id, "value": 3000}])
 
-    assert client.get(f"/groups/{trio['id']}/expenses", headers=alice.headers).json() == []
+    assert client.get(f"/api/groups/{trio['id']}/expenses", headers=alice.headers).json() == []
 
 
 def test_non_members_cannot_see_or_add_expenses(client, alice, register, trio):
     outsider = register("outsider")
 
-    assert client.get(f"/groups/{trio['id']}/expenses", headers=outsider.headers).status_code == 404
+    assert client.get(f"/api/groups/{trio['id']}/expenses", headers=outsider.headers).status_code == 404
     res = post_expense(client, outsider, trio, splits=[{"userId": alice.id, "value": 3000}])
     assert res.status_code == 404

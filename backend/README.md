@@ -11,6 +11,8 @@ uv run uvicorn main:app --reload
 
 API docs: http://127.0.0.1:8000/docs
 
+To run the whole app (API + frontend) from one container, see the Dockerfile in the repo root.
+
 Tables are created on startup if missing. Demo accounts are seeded into an empty database: `alice`, `bob`, `carol`, `dave` — password `password123`. Delete `spliteasy.db` to start fresh.
 
 ## Test
@@ -29,28 +31,31 @@ API tests run twice — against in-memory SQLite and a temporary SQLite file. `t
 | `SPLITEASY_TOKEN_TTL_MINUTES` | `10080` (7 days) | Token lifetime |
 | `SPLITEASY_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated origins allowed to call the API (the Vite dev server) |
 | `SPLITEASY_SEED_DEMO_DATA` | `true` | Seed demo users and groups into an empty database |
+| `SPLITEASY_STATIC_DIR` | unset | Directory of the built frontend. When set, the app serves the UI too (the Docker image sets it). |
 | `SPLITEASY_DATABASE_URL` | `sqlite:///./spliteasy.db` | Any SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host/spliteasy` (install the driver with `uv add`) |
 
 ## API
+
+All endpoints are served under `/api`, leaving the rest of the URL space to the frontend (`/groups/{id}` is a page in the UI as well as an API path).
 
 JSON uses camelCase and money is integer cents, matching `frontend/src/types.ts`. Errors are `{"detail": "message"}`.
 All endpoints except register/login/health need `Authorization: Bearer <token>`.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/auth/register` | Create account → `{token, user}` |
-| POST | `/auth/login` | Log in with email or username → `{token, user}` |
-| POST | `/auth/logout` | Revoke the current token |
-| GET | `/auth/me` | Current user |
-| GET | `/groups` | My groups with my balance in each |
-| POST | `/groups` | Create a group |
-| GET | `/groups/{id}` | Group with members |
-| POST | `/groups/{id}/members` | Add a member by email or username |
-| GET | `/groups/{id}/expenses` | Expense history, newest first |
-| POST | `/groups/{id}/expenses` | Add expense split by `amount` (cents) or `percent` |
-| GET | `/groups/{id}/balances` | Net balance per member and suggested transfers |
-| GET | `/groups/{id}/settlements` | Payment history, newest first |
-| POST | `/groups/{id}/settlements` | Record a payment |
+| POST | `/api/auth/register` | Create account → `{token, user}` |
+| POST | `/api/auth/login` | Log in with email or username → `{token, user}` |
+| POST | `/api/auth/logout` | Revoke the current token |
+| GET | `/api/auth/me` | Current user |
+| GET | `/api/groups` | My groups with my balance in each |
+| POST | `/api/groups` | Create a group |
+| GET | `/api/groups/{id}` | Group with members |
+| POST | `/api/groups/{id}/members` | Add a member by email or username |
+| GET | `/api/groups/{id}/expenses` | Expense history, newest first |
+| POST | `/api/groups/{id}/expenses` | Add expense split by `amount` (cents) or `percent` |
+| GET | `/api/groups/{id}/balances` | Net balance per member and suggested transfers |
+| GET | `/api/groups/{id}/settlements` | Payment history, newest first |
+| POST | `/api/groups/{id}/settlements` | Record a payment |
 
 Non-members get `404` for a group, so group ids can't be probed.
 

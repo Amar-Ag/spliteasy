@@ -24,7 +24,11 @@ describe('api client', () => {
     vi.stubGlobal('fetch', fetchMock);
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
 
   it('logs in against the backend and stores the token', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { token: 'jwt-123', user: { id: 'u1', email: 'a@x.com', username: 'alice' } }));
@@ -34,7 +38,7 @@ describe('api client', () => {
     expect(user.username).toBe('alice');
     expect(tokenStore.get()).toBe('jwt-123');
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://localhost:8000/auth/login');
+    expect(url).toBe('http://localhost:8000/api/auth/login');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ identifier: 'alice', password: 'password123' });
     expect(init.headers.Authorization).toBeUndefined();
@@ -47,7 +51,7 @@ describe('api client', () => {
     await api.listExpenses('grp 1');
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://localhost:8000/groups/grp%201/expenses');
+    expect(url).toBe('http://localhost:8000/api/groups/grp%201/expenses');
     expect(init.headers.Authorization).toBe('Bearer jwt-123');
   });
 
@@ -89,13 +93,24 @@ describe('api client', () => {
     await expect(api.listGroups()).rejects.toMatchObject({ status: 0, message: expect.stringContaining('backend running') });
   });
 
+  it('calls the same origin when VITE_API_URL is empty (backend serves the app)', async () => {
+    vi.stubEnv('VITE_API_URL', '');
+    vi.resetModules();
+    const { api: sameOrigin } = await import('./api');
+    fetchMock.mockResolvedValue(jsonResponse(200, { token: 't', user: { id: 'u1', email: 'a@x.com', username: 'alice' } }));
+
+    await sameOrigin.login({ identifier: 'alice', password: 'password123' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/login');
+  });
+
   it('revokes the token on logout', async () => {
     tokenStore.set('jwt-123');
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
 
     await api.logout();
 
-    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8000/auth/logout');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8000/api/auth/logout');
     expect(tokenStore.get()).toBeNull();
   });
 });
